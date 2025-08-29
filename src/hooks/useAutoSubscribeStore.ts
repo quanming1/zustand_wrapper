@@ -2,55 +2,65 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import { createNonInvasiveProxy } from "@/libs/createNonInvasiveProxy";
-import type { FieldSubscribeStore } from "@/libs/zustand-wrapper";
+import type { UseBoundStore, StoreApi } from "zustand";
 
-export function useAutoSubscribeStore<T extends Record<string, unknown>>(store: FieldSubscribeStore<T>): T {
+const UNINITIALIZED = Symbol("uninitialized");
+
+export function useAutoSubscribeStore<T extends Record<string, unknown>>(store: UseBoundStore<StoreApi<T>>): T {
   const [, forceUpdate] = useState({});
-  const subscriptionsRef = useRef<Map<keyof T, () => void>>(new Map());
-  const accessedFieldsRef = useRef<Set<keyof T>>(new Set());
+  const currentAccessedFieldsRef = useRef<Set<keyof T>>(new Set());
+  const subscribedFieldsRef = useRef<Set<keyof T>>(new Set());
+  const prevStateRef = useRef<T | typeof UNINITIALIZED>(UNINITIALIZED);
 
   const triggerUpdate = useCallback(() => {
     forceUpdate({});
   }, []);
 
-  const cleanupSubscriptions = useCallback(() => {
-    subscriptionsRef.current.forEach((unsubscribe) => {
-      unsubscribe();
-    });
-    subscriptionsRef.current.clear();
-  }, []);
+  currentAccessedFieldsRef.current.clear();
 
-  const subscribeToField = useCallback(
-    (field: keyof T) => {
-      if (subscriptionsRef.current.has(field)) {
+  useEffect(() => {
+    prevStateRef.current = store.getState();
+    subscribedFieldsRef.current = new Set(currentAccessedFieldsRef.current);
+
+    const unsubscribe = store.subscribe((state) => {
+      const prevState = prevStateRef.current;
+      if (prevState === UNINITIALIZED) {
+        prevStateRef.current = state;
         return;
       }
 
-      const unsubscribe = store.subscribe(field, (newValue, prevValue) => {
-        triggerUpdate();
+      let shouldUpdate = false;
+      subscribedFieldsRef.current.forEach((field) => {
+        if (state[field] !== (prevState as T)[field]) {
+          shouldUpdate = true;
+        }
       });
 
-      subscriptionsRef.current.set(field, unsubscribe);
-    },
-    [store, triggerUpdate]
-  );
+      if (shouldUpdate) {
+        triggerUpdate();
+      }
 
-  const storeState = store.originalStore.getState();
+      prevStateRef.current = state;
+    });
 
-  const proxyStore = createNonInvasiveProxy(storeState, {
+    return unsubscribe;
+  }, [store, triggerUpdate]);
+
+  const proxyStore = createNonInvasiveProxy({} as T, {
     get: (target, prop, receiver) => {
       if (typeof prop === "string" || typeof prop === "symbol") {
         const field = prop as keyof T;
 
-        const value = Reflect.get(target, prop);
+        // 从store获取最新的值
+        const currentState = store.getState();
+        const value = currentState[field];
 
         if (typeof value !== "function") {
-          accessedFieldsRef.current.add(field);
-          subscribeToField(field);
+          currentAccessedFieldsRef.current.add(field);
         }
 
         if (typeof value === "function") {
-          return value.bind(target);
+          return (value as (...args: unknown[]) => unknown).bind(currentState);
         }
 
         return value;
@@ -58,16 +68,6 @@ export function useAutoSubscribeStore<T extends Record<string, unknown>>(store: 
 
       return Reflect.get(target, prop, receiver);
     },
-  });
-
-  useEffect(() => {
-    return () => {
-      cleanupSubscriptions();
-    };
-  }, [cleanupSubscriptions]);
-
-  useEffect(() => {
-    accessedFieldsRef.current.clear();
   });
 
   return proxyStore;

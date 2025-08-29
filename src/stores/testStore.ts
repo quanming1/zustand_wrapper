@@ -1,4 +1,4 @@
-import { createFieldStore } from "@/libs/zustand-wrapper";
+import { create } from "zustand";
 
 interface TestState extends Record<string, unknown> {
   propertyA: number;
@@ -8,17 +8,18 @@ interface TestState extends Record<string, unknown> {
   resetAll: () => void;
 }
 
-export const testStore = createFieldStore<TestState>((set) => ({
+export const testStore = create<TestState>((set) => ({
   propertyA: 0,
   propertyB: "初始值",
+
   updatePropertyA: () => {
-    set((state: TestState) => ({
+    set((state) => ({
       propertyA: state.propertyA + 1,
     }));
   },
 
   updatePropertyB: () => {
-    set((state: TestState) => ({
+    set((state) => ({
       propertyB: `更新了 ${Date.now()}`,
     }));
   },
