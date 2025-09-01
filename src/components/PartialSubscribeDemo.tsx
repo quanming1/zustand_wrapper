@@ -1,12 +1,14 @@
 "use client";
 
-import { useAutoSubscribeStore } from "@/hooks/useAutoSubscribeStore";
+import { useStore } from "@/hooks/useAutoSubscribeStore";
 import { testStore } from "@/stores/testStore";
 
 export default function PartialSubscribeDemo() {
   console.log("部分订阅演示组件：更新");
-
-  const store = useAutoSubscribeStore(testStore);
+  const stores = useStore();
+  const propertyA = stores.testStore.propertyA;
+  const updatePropertyA = stores.testStore.updatePropertyA;
+  const updatePropertyB = stores.testStore.updatePropertyB;
 
   return (
     <div className="p-6 border-2 border-purple-500 rounded-lg">
@@ -15,15 +17,15 @@ export default function PartialSubscribeDemo() {
       <div className="space-y-4">
         <div className="p-3 bg-purple-50 rounded">
           <p className="text-sm text-gray-600">只访问 propertyA（只订阅这一个字段）:</p>
-          <p className="text-lg font-semibold">propertyA: {store.propertyA}</p>
+          <p className="text-lg font-semibold">propertyA: {propertyA}</p>
         </div>
 
         <div className="flex gap-2 flex-wrap">
-          <button onClick={store.updatePropertyA} className="px-4 py-2 bg-purple-500 text-white rounded hover:bg-purple-600">
+          <button onClick={updatePropertyA} className="px-4 py-2 bg-purple-500 text-white rounded hover:bg-purple-600">
             更新 Property A（会触发重渲染）
           </button>
 
-          <button onClick={store.updatePropertyB} className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600">
+          <button onClick={updatePropertyB} className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600">
             更新 Property B（不会触发重渲染）
           </button>
         </div>

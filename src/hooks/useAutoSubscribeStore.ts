@@ -1,74 +1,84 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { createNonInvasiveProxy } from "@/libs/createNonInvasiveProxy";
+import { stores } from "@/stores";
+import type { StoresType } from "@/stores";
 import type { UseBoundStore, StoreApi } from "zustand";
 
-const UNINITIALIZED = Symbol("uninitialized");
+type StoreStates = {
+  [K in keyof StoresType]: StoresType[K] extends UseBoundStore<StoreApi<infer T>> ? T : never;
+};
 
-export function useAutoSubscribeStore<T extends Record<string, unknown>>(store: UseBoundStore<StoreApi<T>>): T {
+export function useStore(): StoreStates {
   const [, forceUpdate] = useState({});
-  const currentAccessedFieldsRef = useRef<Set<keyof T>>(new Set());
-  const subscribedFieldsRef = useRef<Set<keyof T>>(new Set());
-  const prevStateRef = useRef<T | typeof UNINITIALIZED>(UNINITIALIZED);
+  const storeSubscribedFields = useRef(new Map<string, Set<string>>());
 
   const triggerUpdate = useCallback(() => {
     forceUpdate({});
   }, []);
 
-  currentAccessedFieldsRef.current.clear();
+  const proxyStores = useMemo(() => {
+    const proxies = {} as StoreStates;
+
+    (Object.keys(stores) as Array<keyof typeof stores>).forEach((storeName) => {
+      const store = stores[storeName];
+      (proxies as Record<string, unknown>)[storeName as string] = createNonInvasiveProxy(store, {
+        get: (target, prop, receiver) => {
+          if (typeof prop === "string" || typeof prop === "symbol") {
+            const field = prop as string;
+            const store = stores[storeName as keyof typeof stores];
+            const currentState = store.getState();
+            const value = currentState[field];
+
+            // 记录访问的非函数字段到订阅列表
+            if (typeof value !== "function") {
+              if (!storeSubscribedFields.current.has(storeName)) {
+                storeSubscribedFields.current.set(storeName, new Set());
+              }
+              storeSubscribedFields.current.get(storeName)!.add(field);
+            }
+
+            if (typeof value === "function") {
+              return (value as (...args: unknown[]) => unknown).bind(currentState);
+            }
+
+            return value;
+          }
+
+          return Reflect.get(target, prop, receiver);
+        },
+      });
+    });
+
+    return proxies;
+  }, []);
+
+  (Object.keys(stores) as Array<keyof typeof stores>).forEach((storeName) => {
+    storeSubscribedFields.current.get(storeName as string)?.clear();
+  });
 
   useEffect(() => {
-    prevStateRef.current = store.getState();
-    subscribedFieldsRef.current = new Set(currentAccessedFieldsRef.current);
+    const unsubscribes: (() => void)[] = [];
 
-    const unsubscribe = store.subscribe((state) => {
-      const prevState = prevStateRef.current;
-      if (prevState === UNINITIALIZED) {
-        prevStateRef.current = state;
-        return;
-      }
+    (Object.keys(stores) as Array<keyof typeof stores>).forEach((storeName) => {
+      const store = stores[storeName];
 
-      let shouldUpdate = false;
-      subscribedFieldsRef.current.forEach((field) => {
-        if (state[field] !== (prevState as T)[field]) {
-          shouldUpdate = true;
+      const unsubscribe = store.subscribe((state: Record<string, unknown>, prevState: Record<string, unknown>) => {
+        const subscribedFields = storeSubscribedFields.current.get(storeName as string);
+        const hasFieldChanged = subscribedFields && prevState && Array.from(subscribedFields).some((field) => state[field] !== prevState[field]);
+        if (hasFieldChanged) {
+          triggerUpdate();
         }
       });
 
-      if (shouldUpdate) {
-        triggerUpdate();
-      }
-
-      prevStateRef.current = state;
+      unsubscribes.push(unsubscribe);
     });
 
-    return unsubscribe;
-  }, [store, triggerUpdate]);
+    return () => {
+      unsubscribes.forEach((unsubscribe) => unsubscribe());
+    };
+  }, []);
 
-  const proxyStore = createNonInvasiveProxy({} as T, {
-    get: (target, prop, receiver) => {
-      if (typeof prop === "string" || typeof prop === "symbol") {
-        const field = prop as keyof T;
-
-        // 从store获取最新的值
-        const currentState = store.getState();
-        const value = currentState[field];
-
-        if (typeof value !== "function") {
-          currentAccessedFieldsRef.current.add(field);
-        }
-
-        if (typeof value === "function") {
-          return (value as (...args: unknown[]) => unknown).bind(currentState);
-        }
-
-        return value;
-      }
-
-      return Reflect.get(target, prop, receiver);
-    },
-  });
-
-  return proxyStore;
+  return proxyStores;
 }
