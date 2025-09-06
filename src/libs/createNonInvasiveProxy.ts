@@ -1,122 +1,112 @@
-interface ZustandStore<T> {
-  getState(): T;
-  setState(partial: Partial<T> | ((state: T) => Partial<T>)): void;
-  subscribe(listener: (state: T) => void): () => void;
-}
+/* eslint-disable @typescript-eslint/no-explicit-any */
 
-export function createNonInvasiveProxy<T extends object>(store: ZustandStore<T>, handler?: ProxyHandler<T>): T {
-  const emptyProxy = {} as T;
+type RecordFunction = () => () => string[];
+
+type ProxiedObject<T> = T & {
+  _startRecord: RecordFunction;
+};
+
+function createNonInvasiveProxy<T extends Record<string, any>>(target: T, handler?: ProxyHandler<T>): ProxiedObject<T> {
+  const accessedProperties: Set<string> = new Set();
+  let recording = false;
+
+  const record: RecordFunction = () => {
+    recording = true;
+    return () => {
+      const visited = Array.from(accessedProperties);
+      accessedProperties.clear();
+      recording = false;
+      return visited;
+    };
+  };
 
   const fullHandler: ProxyHandler<T> = {
-    get(proxyTarget, prop, receiver) {
-      const currentState = store.getState();
-      if (handler?.get) {
-        return handler.get(currentState, prop, receiver);
+    get(_, prop, receiver) {
+      if (prop === "_startRecord") {
+        return record;
       }
 
-      const value = Reflect.get(currentState, prop);
+      const res = handler?.get ? handler.get(target, prop, receiver) : Reflect.get(target, prop, receiver);
 
-      if (typeof value === "function") {
-        return value.bind(currentState);
+      if (typeof prop === "string" && recording && typeof res !== "function") {
+        accessedProperties.add(prop);
       }
 
-      return value;
+      return res;
     },
 
-    set(proxyTarget, prop, value, receiver) {
+    set(_, prop, value, receiver) {
       if (handler?.set) {
-        return handler.set(store.getState(), prop, value, receiver);
+        return handler.set(target, prop, value, receiver);
       }
-
-      store.setState((state) => ({ ...state, [prop]: value } as Partial<T>));
-      return true;
+      return Reflect.set(target, prop, value, receiver);
     },
 
-    deleteProperty(proxyTarget, prop) {
+    deleteProperty(_, prop) {
       if (handler?.deleteProperty) {
-        return handler.deleteProperty(store.getState(), prop);
+        return handler.deleteProperty(target, prop);
       }
-
-      store.setState((state) => {
-        const newState = { ...state };
-        delete newState[prop as keyof T];
-        return newState;
-      });
-      return true;
+      return Reflect.deleteProperty(target, prop);
     },
 
-    has(proxyTarget, prop) {
-      const currentState = store.getState();
+    has(_, prop) {
       if (handler?.has) {
-        return handler.has(currentState, prop);
+        return handler.has(target, prop);
       }
-
-      return Reflect.has(currentState, prop);
+      return Reflect.has(target, prop);
     },
 
-    ownKeys(proxyTarget) {
-      const currentState = store.getState();
+    ownKeys(_) {
       if (handler?.ownKeys) {
-        return handler.ownKeys(currentState);
+        return handler.ownKeys(target);
       }
-
-      return Reflect.ownKeys(currentState);
+      return Reflect.ownKeys(target);
     },
 
-    getOwnPropertyDescriptor(proxyTarget, prop) {
-      const currentState = store.getState();
+    getOwnPropertyDescriptor(_, prop) {
       if (handler?.getOwnPropertyDescriptor) {
-        return handler.getOwnPropertyDescriptor(currentState, prop);
+        return handler.getOwnPropertyDescriptor(target, prop);
       }
-
-      return Reflect.getOwnPropertyDescriptor(currentState, prop);
+      return Reflect.getOwnPropertyDescriptor(target, prop);
     },
 
-    defineProperty(proxyTarget, prop, descriptor) {
+    defineProperty(_, prop, descriptor) {
       if (handler?.defineProperty) {
-        return handler.defineProperty(store.getState(), prop, descriptor);
+        return handler.defineProperty(target, prop, descriptor);
       }
-
-      if (descriptor.value !== undefined) {
-        store.setState((state) => ({ ...state, [prop]: descriptor.value } as Partial<T>));
-      }
-      return true;
+      return Reflect.defineProperty(target, prop, descriptor);
     },
 
-    preventExtensions(proxyTarget) {
+    preventExtensions(_) {
       if (handler?.preventExtensions) {
-        return handler.preventExtensions(store.getState());
+        return handler.preventExtensions(target);
       }
-
-      return Reflect.preventExtensions(store.getState());
+      return Reflect.preventExtensions(target);
     },
 
-    isExtensible(proxyTarget) {
-      const currentState = store.getState();
+    isExtensible(_) {
       if (handler?.isExtensible) {
-        return handler.isExtensible(currentState);
+        return handler.isExtensible(target);
       }
-
-      return Reflect.isExtensible(currentState);
+      return Reflect.isExtensible(target);
     },
 
-    getPrototypeOf(proxyTarget) {
-      const currentState = store.getState();
+    getPrototypeOf(_) {
       if (handler?.getPrototypeOf) {
-        return handler.getPrototypeOf(currentState);
+        return handler.getPrototypeOf(target);
       }
-
-      return Reflect.getPrototypeOf(currentState);
+      return Reflect.getPrototypeOf(target);
     },
 
-    setPrototypeOf(proxyTarget, prototype) {
+    setPrototypeOf(_, prototype) {
       if (handler?.setPrototypeOf) {
-        return handler.setPrototypeOf(store.getState(), prototype);
+        return handler.setPrototypeOf(target, prototype);
       }
-
-      return Reflect.setPrototypeOf(store.getState(), prototype);
+      return Reflect.setPrototypeOf(target, prototype);
     },
   };
 
-  return new Proxy(emptyProxy, fullHandler);
+  return new Proxy({} as T, fullHandler) as unknown as ProxiedObject<T>;
 }
+
+export default createNonInvasiveProxy;
