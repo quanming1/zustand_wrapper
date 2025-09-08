@@ -1,38 +1,9 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-type RecordFunction = () => () => string[];
-
-type ProxiedObject<T> = T & {
-  _startRecord: RecordFunction;
-};
-
-function createNonInvasiveProxy<T extends Record<string, any>>(target: T, handler?: ProxyHandler<T>): ProxiedObject<T> {
-  const accessedProperties: Set<string> = new Set();
-  let recording = false;
-
-  const record: RecordFunction = () => {
-    recording = true;
-    return () => {
-      const visited = Array.from(accessedProperties);
-      accessedProperties.clear();
-      recording = false;
-      return visited;
-    };
-  };
-
+function createNonInvasiveProxy<T extends Record<string, any>>(target: T, handler?: ProxyHandler<T>): T {
   const fullHandler: ProxyHandler<T> = {
     get(_, prop, receiver) {
-      if (prop === "_startRecord") {
-        return record;
-      }
-
-      const res = handler?.get ? handler.get(target, prop, receiver) : Reflect.get(target, prop, receiver);
-
-      if (typeof prop === "string" && recording && typeof res !== "function") {
-        accessedProperties.add(prop);
-      }
-
-      return res;
+      return handler?.get ? handler.get(target, prop, receiver) : Reflect.get(target, prop, receiver);
     },
 
     set(_, prop, value, receiver) {
@@ -106,7 +77,8 @@ function createNonInvasiveProxy<T extends Record<string, any>>(target: T, handle
     },
   };
 
-  return new Proxy({} as T, fullHandler) as unknown as ProxiedObject<T>;
+  const proxy = new Proxy({} as T, fullHandler);
+  return proxy;
 }
 
 export default createNonInvasiveProxy;

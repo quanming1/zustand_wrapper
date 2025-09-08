@@ -1,15 +1,18 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
-import { useStore } from "@/hooks/useAutoSubscribeStore";
+import { useStores } from "@/hooks/useStores";
+import { testStore } from "@/stores/testStore";
+import { useEffect } from "react";
 
 export default function AutoSubscribeDemo() {
   console.log("自动订阅演示组件：更新");
-  const stores = useStore();
-  const propertyA = stores.testStore.propertyA;
-  const propertyB = stores.testStore.propertyB;
-  const updatePropertyA = stores.testStore.updatePropertyA;
-  const updatePropertyB = stores.testStore.updatePropertyB;
-  const resetAll = stores.testStore.resetAll;
+  const store = useStores(testStore);
+  const propertyA = store.propertyA;
+  const propertyB = store.propertyB;
+  const updatePropertyA = store.updatePropertyA;
+  const updatePropertyB = store.updatePropertyB;
+  const resetAll = store.resetAll;
 
   return (
     <div className="p-6 border-2 border-blue-500 rounded-lg">

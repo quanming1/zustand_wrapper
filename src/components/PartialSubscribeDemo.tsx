@@ -1,14 +1,14 @@
 "use client";
 
-import { useStore } from "@/hooks/useAutoSubscribeStore";
+import { useStores } from "@/hooks/useStores";
 import { testStore } from "@/stores/testStore";
 
 export default function PartialSubscribeDemo() {
   console.log("部分订阅演示组件：更新");
-  const stores = useStore();
-  const propertyA = stores.testStore.propertyA;
-  const updatePropertyA = stores.testStore.updatePropertyA;
-  const updatePropertyB = stores.testStore.updatePropertyB;
+  const store = useStores(testStore);
+  const propertyA = store.propertyA;
+  const updatePropertyA = store.updatePropertyA;
+  const updatePropertyB = store.updatePropertyB;
 
   return (
     <div className="p-6 border-2 border-purple-500 rounded-lg">
