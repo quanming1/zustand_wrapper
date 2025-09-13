@@ -1,6 +1,9 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import { AntdThemeProvider } from "@/ui/antd/antd-theme-provider";
+import { GlobalModalContainer } from "@/ui/containers/GlobalModalContainer";
+import { CustomerModalContainer } from "@/ui/containers/CustomerModalContainer";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -24,10 +27,12 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-      >
-        {children}
+      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
+        <AntdThemeProvider>
+          {children}
+          <GlobalModalContainer />
+          <CustomerModalContainer />
+        </AntdThemeProvider>
       </body>
     </html>
   );

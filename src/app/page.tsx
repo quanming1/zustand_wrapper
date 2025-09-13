@@ -1,14 +1,14 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-import AutoSubscribeDemo from "@/components/AutoSubscribeDemo";
-import PartialSubscribeDemo from "@/components/PartialSubscribeDemo";
-import ComplexStoreDemo from "@/components/ComplexStoreDemo";
+"use client";
+import AntdShowcase from "@/pages/AntdShowcase";
 
 export default function Home() {
   return (
     <div className="space-y-8">
-      <AutoSubscribeDemo />
+      {/* <AutoSubscribeDemo />
       <PartialSubscribeDemo />
-      <ComplexStoreDemo />
+      <ComplexStoreDemo /> */}
+
+      <AntdShowcase />
     </div>
   );
 }
